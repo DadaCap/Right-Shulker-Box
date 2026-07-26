@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "rightshulkerbox",
+  "version": "${version}",
+  "name": "Right-Shulker-Box",
+  "description": "Right-click any shulker box sitting in any inventory to open its contents in place, without taking it out or placing it down. All logic is server-authoritative; loads on both client and dedicated server so it also works in singleplayer.",
+  "authors": [
+    "Right-Shulker-Box Contributors"
+  ],
+  "contact": {},
+  "license": "LicenseRef-Right-Shulker-Box-License",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "me.dadacap.rightshulkerbox.RightShulkerBoxMod"
+    ]
+  },
+  "mixins": [
+    "rightshulkerbox.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
