@@ -1,0 +1,127 @@
+name: Commit Notification
+
+on:
+  push:
+
+jobs:
+  notify:
+    if: github.repository == 'DadaCap/ironhelper'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Send commit notification to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          COMPARE: ${{ github.event.compare }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          COMMITS: ${{ toJson(github.event.commits) }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "Error: DISCORD_WEBHOOK secret not set"
+            exit 1
+          fi
+
+          FILE_LIST=$(git diff --name-status "$BEFORE" "$AFTER" | sort -u)
+          FILES_CHANGED=$(printf '%s\n' "$FILE_LIST" | sed '/^$/d' | wc -l | tr -d ' ')
+          STATS=$(git diff --shortstat "$BEFORE" "$AFTER")
+          INSERTIONS=$(printf '%s\n' "$STATS" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || true)
+          DELETIONS=$(printf '%s\n' "$STATS" | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || true)
+
+          INSERTIONS=${INSERTIONS:-0}
+          DELETIONS=${DELETIONS:-0}
+
+          # Get per-file stats using numstat for accurate insertion/deletion counts
+          NUMSTAT_OUTPUT=$(git diff --numstat "$BEFORE" "$AFTER")
+
+          if [ -z "$FILE_LIST" ]; then
+            FILE_BLOCK='```text
+          No files changed
+          ```'
+          else
+            FILE_BLOCK_CONTENT=$(while IFS=$'\t' read -r status file; do
+              # Extract stats for this file from NUMSTAT_OUTPUT
+              FILE_STATS=$(printf '%s\n' "$NUMSTAT_OUTPUT" | grep "$file$")
+              FILE_INSERTIONS=$(printf '%s\n' "$FILE_STATS" | awk '{print $1}' || true)
+              FILE_DELETIONS=$(printf '%s\n' "$FILE_STATS" | awk '{print $2}' || true)
+              FILE_INSERTIONS=${FILE_INSERTIONS:-0}
+              FILE_DELETIONS=${FILE_DELETIONS:-0}
+              
+              case "$status" in
+                M) echo "--- $file [+$FILE_INSERTIONS/-$FILE_DELETIONS]" ;;
+                A) echo "+   $file [+$FILE_INSERTIONS]" ;;
+                D) echo "-   $file [-$FILE_DELETIONS]" ;;
+              esac
+            done <<< "$FILE_LIST")
+            FILE_BLOCK=$(printf '```diff\n%s\n```' "$FILE_BLOCK_CONTENT")
+          fi
+
+          HEAD_BLOCK=$(printf '```fix\n%s\n```' "$HEAD_MESSAGE")
+
+          COMMITS_JSON=$(printf '%s' "$COMMITS" | jq -c '
+            map({
+              id: .id[0:7],
+              message: (.message | split("\n")[0]),
+              url: .url,
+              author: (.author.name // "unknown")
+            })
+          ')
+      
+          EMBED_DESCRIPTION=$(printf '%s' "$COMMITS_JSON" | jq -r '
+            .[:10]
+            | map("- [`" + .id + "`](" + .url + ") " + .message + " — **" + .author + "**")
+            | join("\n")
+          ')
+      
+          TOTAL_COMMITS=$(printf '%s' "$COMMITS_JSON" | jq 'length')
+      
+          if [ "$TOTAL_COMMITS" -gt 10 ]; then
+            EMBED_DESCRIPTION="$EMBED_DESCRIPTION\n\n...and $((TOTAL_COMMITS - 10)) more commit(s)."
+          fi
+
+          jq -n \
+            --arg repo "$REPO" \
+            --arg branch "$REF_NAME" \
+            --arg actor "$ACTOR" \
+            --arg compare "$COMPARE" \
+            --arg files_changed "$FILES_CHANGED" \
+            --arg insertions "$INSERTIONS" \
+            --arg deletions "$DELETIONS" \
+            --arg file_block "$FILE_BLOCK" \
+            --arg head_block "$HEAD_BLOCK" \
+            --arg desc "$EMBED_DESCRIPTION" \
+            '{
+              username: "GitHub",
+              avatar_url: "https://avatars.githubusercontent.com/u/37024673",
+              embeds: [
+                {
+                  title: ("Push to " + $repo),
+                  url: $compare,
+                  color: 8323327,
+                  fields: [
+                    { name: "Repo", value: $repo, inline: true },
+                    { name: "Branch", value: $branch, inline: true },
+                    { name: "Pushed By", value: $actor, inline: true },
+                    { name: "Files changed", value: $files_changed, inline: true },
+                    { name: "Lines inserted / deleted", value: ("+" + $insertions + " / -" + $deletions), inline: true },
+                    { name: "\u200b", value: "\u200b", inline: true },
+                    { name: "Changed files", value: $file_block, inline: false },
+                    { name: "Head commit", value: $head_block, inline: false }
+                  ],
+                  description: $desc
+                }
+              ]
+            }' \
+          | curl -sS -X POST "$DISCORD_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d @-
