@@ -70,7 +70,7 @@ public final class ShulkerSession {
 			/** Disallows placing another shulker box inside, preventing nested shulker boxes. */
 			@Override
 			public boolean canPlaceItem(int slot, @NonNull ItemStack stack) {
-				return !isValidShulkerBox(stack);
+				return !isShulkerBox(stack);
 			}
 		};
 
@@ -80,17 +80,16 @@ public final class ShulkerSession {
 		this.initializing = false;
 	}
 
-	/** True if the stack is a single, non-empty shulker box block item (nesting shulkers inside is disallowed). */
-	public static boolean isValidShulkerBox(ItemStack stack) {
+	/** True if the stack contains shulker box(es). */
+	public static boolean isShulkerBox(ItemStack stack) {
 		return !stack.isEmpty()
 				&& stack.getItem() instanceof BlockItem blockItem
-				&& blockItem.getBlock() instanceof ShulkerBoxBlock
-				&& stack.getCount() == 1;
+				&& blockItem.getBlock() instanceof ShulkerBoxBlock;
 	}
 
 	/** True if the stack is a shulker box that can be right-click opened in place. */
 	public static boolean isOpenableShulkerBox(ItemStack stack) {
-		return isValidShulkerBox(stack) && stack.getCount() == 1;
+		return isShulkerBox(stack) && stack.getCount() == 1;
 	}
 
 	/** Checks that the tracked stack is still present, unmoved, in its original host slot. */

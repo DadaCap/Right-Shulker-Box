@@ -66,7 +66,7 @@ public abstract class AbstractContainerMenuMixin {
 				incoming = slot.getItem();
 			}
 
-			if (targetsGrid && ShulkerSession.isValidShulkerBox(incoming)) {
+			if (targetsGrid && ShulkerSession.isShulkerBox(incoming)) {
 				ci.cancel();
 				return;
 			}
