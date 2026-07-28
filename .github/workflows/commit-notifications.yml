@@ -2,6 +2,11 @@ name: Commit Notification
 
 on:
   push:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to (re-)send a notification for"
+        required: true
 
 jobs:
   notify:
@@ -24,12 +29,26 @@ jobs:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
           COMMITS: ${{ toJson(github.event.commits) }}
+          DISPATCH_SHA: ${{ github.event.inputs.sha }}
         run: |
           set -euo pipefail
 
           if [ -z "$DISCORD_WEBHOOK" ]; then
             echo "Error: DISCORD_WEBHOOK secret not set"
             exit 1
+          fi
+
+          if [ -n "$DISPATCH_SHA" ]; then
+            AFTER=$(git rev-parse "$DISPATCH_SHA")
+            BEFORE=$(git rev-parse "$AFTER~1")
+            COMPARE="https://github.com/$REPO/commit/$AFTER"
+            HEAD_MESSAGE=$(git log -1 --format=%B "$AFTER")
+            COMMITS=$(jq -n \
+              --arg id "$AFTER" \
+              --arg message "$HEAD_MESSAGE" \
+              --arg url "https://github.com/$REPO/commit/$AFTER" \
+              --arg author "$(git log -1 --format=%an "$AFTER")" \
+              '[{id: $id, message: $message, url: $url, author: $author}]')
           fi
 
           FILE_LIST=$(git diff --name-status "$BEFORE" "$AFTER" | sort -u)
