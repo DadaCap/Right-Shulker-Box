@@ -21,7 +21,6 @@ import net.minecraft.world.item.ItemStack;
  */
 @Mixin(AbstractContainerMenu.class)
 public abstract class AbstractContainerMenuMixin {
-
 	/**
 	 * Runs before the vanilla click handler. Cancels the click (and opens a session instead) when the
 	 * click is a right-click on an openable shulker box, when the clicked stack already has an active
@@ -90,7 +89,19 @@ public abstract class AbstractContainerMenuMixin {
 			ci.cancel();
 		}
 		if (isOpenAttempt) {
-			ShulkerSessionManager.openFor(serverPlayer, self, slot, stack);
+			// Deferred to a later tick (via ShulkerSessionManager's own tick-bound queue, NOT
+			// MinecraftServer#execute() - that can run its callback synchronously when already on the
+			// main thread, which click handling often already is): handleContainerClick still needs to
+			// finish its suppressRemoteUpdates()/resumeRemoteUpdates() pair on the OUTER menu (this)
+			// after clicked() returns. Swapping player.containerMenu synchronously here would make that
+			// resumeRemoteUpdates() land on the new virtual menu instead, permanently leaving the
+			// outer menu (often the player's own inventory) stuck suppressed, i.e. "ghost-frozen"
+			// until the player manually clicks a slot in it again.
+			// 
+			// Not doing this will cause the outer menu to be frozen until the player manually interacts with it.
+			// This is most commonly not an issue, but will also be triggered while the client is in their own inventory,
+			// which will freeze it, thus not updating, even with item pickups, commands, etc., until the player clicks a slot.
+			ShulkerSessionManager.deferToNextTick(() -> ShulkerSessionManager.openFor(serverPlayer, self, slot, stack));
 		}
 	}
 
