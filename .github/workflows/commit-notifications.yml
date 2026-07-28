@@ -5,7 +5,7 @@ on:
 
 jobs:
   notify:
-    if: github.repository == 'DadaCap/ironhelper'
+    if: github.repository == 'DadaCap/Right-Shulker-Box'
     runs-on: ubuntu-latest
 
     steps:
