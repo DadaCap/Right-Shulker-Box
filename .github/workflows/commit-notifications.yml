@@ -48,7 +48,7 @@ jobs:
               --arg message "$HEAD_MESSAGE" \
               --arg url "https://github.com/$REPO/commit/$AFTER" \
               --arg author "$(git log -1 --format=%an "$AFTER")" \
-              '[{id: $id, message: $message, url: $url, author: $author}]')
+              '[{id: $id, message: $message, url: $url, author: {name: $author}}]')
           fi
 
           FILE_LIST=$(git diff --name-status "$BEFORE" "$AFTER" | sort -u)
