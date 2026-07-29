@@ -8,6 +8,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import me.dadacap.rightshulkerbox.ShulkerSession;
 import me.dadacap.rightshulkerbox.ShulkerSessionManager;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
@@ -87,6 +88,13 @@ public abstract class AbstractContainerMenuMixin {
 
 		if (isLocked || isOpenAttempt) {
 			ci.cancel();
+
+			// Even though the click is cancelled, the client still thinks it succeeded, and the offhand slot
+			// doesn't appear in the menu, and thus isn't updated automatically by the mixin.
+			// This would cause cause the client to see the shulker box in the offhand as a ghost-item sometimes.
+			if (isLocked && clickType == ContainerInput.SWAP && button == Inventory.SLOT_OFFHAND) {
+				ShulkerSession.syncOffhand(serverPlayer);
+			}
 		}
 		if (isOpenAttempt) {
 			// Deferred to a later tick (via ShulkerSessionManager's own tick-bound queue, NOT
